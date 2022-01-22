@@ -1,0 +1,5 @@
+make --dry-run --keep-going --print-directory
+make: Entering directory '/home/hughlynch/projects/wordle'
+g++ -std=c++17 -g -O2 -Wall -Wextra -pedantic -MD -MP  wordle.o -o wordle 
+make: Leaving directory '/home/hughlynch/projects/wordle'
+ 
