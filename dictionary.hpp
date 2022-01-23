@@ -15,8 +15,8 @@ const uint64_t MSB_MASK = 0xAAAAAAAAAAAAAAAA;
 
 class Dictionary {
  public:
-  Dictionary(const std::vector<Word> words)
-    : all_words(words), pruned_(words.size(), false) {
+  Dictionary(const std::vector<Word>* words)
+    : all_words(*words), pruned_(words->size(), false) {
   }
 
   /**
@@ -29,7 +29,7 @@ class Dictionary {
 
   size_t size() const;
 
-  const std::vector<Word> all_words;
+  const std::vector<Word>& all_words;
 
  private:
   /**
@@ -151,7 +151,7 @@ std::vector<bool> Dictionary::prune(const Guess& guess) const {
     //std::string word = this->reference_words[i];
     //std::cout << word << std::endl;
 
-    const Word& w = all_words[i];
+    const Word& w = all_words.at(i);
     const uint64_t encoded_word = w.encoded_25bit_word();
 
     // Check correct placements
@@ -178,7 +178,7 @@ std::vector<bool> Dictionary::prune(const Guess& guess) const {
     }
 
     // Check min letter count
-    uint64_t letter_cts = all_words[i].encoded_letter_counts();
+    uint64_t letter_cts = all_words.at(i).encoded_letter_counts();
 
     uint64_t min_result = borrow_2bit(letter_cts, min_cts);
     if (min_result) {

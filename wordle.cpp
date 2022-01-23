@@ -60,7 +60,7 @@ double test_guess(const Dictionary& dict, Word g) {
 }
 
 void perf_test(const std::vector<Word>& wordlist) {
-  Dictionary dict(wordlist);
+  Dictionary dict(&wordlist);
 
   std::vector<std::pair<const Word*, double>> average_sizes;
   int i = 0;
