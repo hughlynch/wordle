@@ -1,5 +1,6 @@
 #include "dictionary.hpp"
 #include "guess.hpp"
+#include "word.hpp"
 
 #include <assert.h>
 
@@ -13,43 +14,31 @@
 /**
  * Load wordlist from file.
  */
-std::vector<std::string> load_wordlist(std::string filename) {
+std::vector<Word> load_wordlist(std::string filename) {
   std::ifstream file(filename);
 
-  std::vector<std::string> wordlist;
-  std::string word;
-  while(file >> word) {
-    wordlist.emplace_back(word);
+  std::vector<Word> wordlist;
+  std::string text;
+  while(file >> text) {
+    wordlist.emplace_back(text);
   }
 
   return wordlist;
 }
 
-double test_guess(const Dictionary& dict, std::string g) {
-  //Guess check("rural");
-  //check.check("viral");
-  //std::cout << check << std::endl;
-
-  std::unordered_map<Guess, std::pair<Guess, int>> guess_weights;
-  for (std::string s : dict.reference_words) {
-    Guess guess(g);
-    guess.check(s, false);
-    guess_weights.emplace(guess, std::pair<Guess, int>(guess, 0));
-    std::pair<Guess, int>& val = guess_weights.at(guess);
-    val.second++;
-    guess_weights.insert(std::pair<Guess, std::pair<Guess, int>>(guess, val));
-
-    //if (guess == check) {
-    //  std::cout << guess << ": " << s << std::endl;
-    //}
+double test_guess(const Dictionary& dict, Word g) {
+  std::unordered_map<Guess, int> guess_weights;
+  for (const Word& s : dict.all_words) {
+    Guess guess(&g, &s);
+    guess_weights.emplace(guess, 0);
+    guess_weights[guess]++;
   }
 
-  //std::cout << guess_weights.size() << " unique guesses." << std::endl;
+  // std::cout << guess_weights.size() << " unique guesses." << std::endl;
 
   std::vector<int> sizes;
-  for (auto [key, v] : guess_weights) {
-    Guess guess = v.first;
-    int weight = v.second;
+  for (auto& [key, weight] : guess_weights) {
+    Guess guess = key;
     guess.infer();
     std::vector<bool> pruned = dict.prune(guess);
     int size = 0;
@@ -59,8 +48,6 @@ double test_guess(const Dictionary& dict, std::string g) {
       }
     }
 
-    //assert(size == weight);
-
     sizes.push_back(size * weight);
   }
 
@@ -68,21 +55,21 @@ double test_guess(const Dictionary& dict, std::string g) {
   for (int size : sizes) {
     acc += size;
   }
-  acc /= dict.reference_words.size();
+  acc /= dict.size();
   return acc;
 }
 
-void perf_test(std::vector<std::string> wordlist) {
+void perf_test(const std::vector<Word>& wordlist) {
   Dictionary dict(wordlist);
 
-  std::vector<std::pair<std::string, double>> average_sizes;
+  std::vector<std::pair<const Word*, double>> average_sizes;
   int i = 0;
 
   for (const auto& g : wordlist) {
     if (++i % 100 == 0) std::cout << i << ". " << g;
     double average_size = test_guess(dict, g);
     if (i % 100 == 0) std::cout << ": " << average_size << std::endl;
-    average_sizes.emplace_back(g, average_size);
+    average_sizes.emplace_back(&g, average_size);
   }
 
   std::sort(average_sizes.begin(), average_sizes.end(), [](auto &a, auto &b) {
@@ -90,7 +77,7 @@ void perf_test(std::vector<std::string> wordlist) {
   });
   
   for (const auto& [k,v] : average_sizes) {
-    std::cout << k << "," << v << std::endl;
+    std::cout << *k << "," << v << std::endl;
   }
 }
 
@@ -100,13 +87,11 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  std::vector<std::string> wordlist = load_wordlist(argv[1]);
+  std::vector<Word> wordlist = load_wordlist(argv[1]);
 
-  Guess check("rural");
-  check.check("viral");
-
-  //Guess guess("rural");
-  //guess.check("spray");
+  Word rural("rural");
+  Word viral("viral");
+  Guess check(&rural, &viral);
 
   std::cout << check << std::endl;
   //check.print_state();

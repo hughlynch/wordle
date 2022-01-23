@@ -3,22 +3,20 @@
 
 #include "constants.hpp"
 #include "guess.hpp"
+#include "word.hpp"
 
-#include <bitset>
+#include <boost/dynamic_bitset.hpp>
 #include <iostream>
 #include <map>
 #include <vector>
 
-const size_t BITS_PER_LETTER = 5;
-const size_t BITS_PER_COUNT = 2;
 const uint64_t LSB_MASK = 0x5555555555555555;
 const uint64_t MSB_MASK = 0xAAAAAAAAAAAAAAAA;
 
 class Dictionary {
  public:
-  Dictionary(const std::vector<std::string> wordlist)
-    : reference_words(wordlist){
-    encode_wordlist();
+  Dictionary(const std::vector<Word> words)
+    : all_words(words), pruned_(words.size(), false) {
   }
 
   /**
@@ -28,17 +26,10 @@ class Dictionary {
    * Replaces this.pruned_ if inplace.
    */
   std::vector<bool> prune(const Guess& guess) const;
-  std::vector<bool> prune(const Guess& guess, bool inplace) {
-    auto pruned = prune(guess);
-    if (inplace) {
-      this->pruned_ = pruned;
-    }
-    return pruned;
-  }
 
   size_t size() const;
 
-  const std::vector<std::string> reference_words;
+  const std::vector<Word> all_words;
 
  private:
   /**
@@ -46,16 +37,12 @@ class Dictionary {
    */
   static uint64_t borrow_2bit(uint64_t x, uint64_t y);
 
-  void encode_wordlist();
-
   /**
    * For each word, store an encoded representation of the letter + positions,
    * as well as a 2-bit letter count for each letter and a 'pruned' vector to
    * denote whether a word should be considered pruned from the dataset.
    */
   std::vector<bool> pruned_;
-  std::vector<uint32_t> words_;
-  std::vector<uint64_t> counts_;
 };
 
 
@@ -164,7 +151,8 @@ std::vector<bool> Dictionary::prune(const Guess& guess) const {
     //std::string word = this->reference_words[i];
     //std::cout << word << std::endl;
 
-    const uint32_t encoded_word = this->words_[i];
+    const Word& w = all_words[i];
+    const uint64_t encoded_word = w.encoded_25bit_word();
 
     // Check correct placements
     uint32_t c_result = (c_check ^ encoded_word) & c_mask;
@@ -190,7 +178,7 @@ std::vector<bool> Dictionary::prune(const Guess& guess) const {
     }
 
     // Check min letter count
-    uint64_t letter_cts = this->counts_[i];
+    uint64_t letter_cts = all_words[i].encoded_letter_counts();
 
     uint64_t min_result = borrow_2bit(letter_cts, min_cts);
     if (min_result) {
@@ -215,7 +203,7 @@ std::vector<bool> Dictionary::prune(const Guess& guess) const {
 
 // TODO make this return size of unpruned set
 size_t Dictionary::size() const {
-  return this->reference_words.size();
+  return this->all_words.size();
 }
 
 /**
@@ -240,46 +228,6 @@ uint64_t Dictionary::borrow_2bit(uint64_t x, uint64_t y) {
    *     (b_in << 1)
    */
   return MSB_MASK & (tmp | ((b_in << 1) & ~(x ^ y)));
-}
-
-void Dictionary::encode_wordlist() {
-  for (std::string word : this->reference_words) {
-    this->pruned_.push_back(0);
-
-    /**
-     * Encode word as a sequence of five 5-bit numbers
-     * --> 25 bits, 7 bits padding
-     *
-     * adult is encoded as:
-     * -------    t    l    u    d    a
-     * 00000001001101011101000001100000
-     */
-    uint32_t encoded_word = 0;
-    for (int i = 0; i < NUM_LETTERS; ++i) {
-      unsigned char c = word[i] - 'a';
-      encoded_word |= (uint32_t) c << BITS_PER_LETTER * i;
-    }
-    this->words_.push_back(encoded_word);
-
-    /**
-     * Encode letter counts as 2-bit count per letter
-     * --> 52 bits, 12 bits padding
-     *
-     * aorta is encoded as:
-     * ------------            1t  1r    1o                          2a
-     * 0000000000000000000000000100010000010000000000000000000000000010
-     */
-    std::map<char, int> l_counts;
-    for (char c : word) {
-      ++l_counts[c];
-    }
-    uint64_t encoded_count = 0;
-    for (const auto& [l, ct] : l_counts) {
-      unsigned char pos = l - 'a';
-      encoded_count |= (uint64_t) ct << BITS_PER_COUNT * pos;
-    }
-    this->counts_.push_back(encoded_count);
-  }
 }
 
 #endif

@@ -2,6 +2,7 @@
 #define GUESS_H
 
 #include "constants.hpp"
+#include "word.hpp"
 
 #include <functional>
 #include <iostream>
@@ -12,16 +13,10 @@
 
 class Guess {
  public:
-  Guess(const std::string word)
-    : word_(word) {}
-
-  /*
-   * Generate internal state by checking against a solution word.
-   *
-   * infer: whether or not to make inferences after setting tiles.
-   */
-  void check(const std::string solution, bool infer);
-  void check(const std::string solution);
+  Guess(const Word* guess, const Word* solution)
+    : guess_(guess), solution_(solution) {
+      compare();
+    }
 
   /**
    * Print internal state of this guess.
@@ -47,10 +42,10 @@ class Guess {
   std::map<char, int> max_letter_counts;
 
  private:
-  static std::map<char, int> count_letters(const std::string);
+  void compare();
 
-  // Feedback from checking a guess
-  std::string word_;
+  const Word* guess_;
+  const Word* solution_;
   char greens_[NUM_LETTERS] = {0, 0, 0, 0, 0};
   char yellows_[NUM_LETTERS] = {0, 0, 0, 0, 0};
   char greys_[NUM_LETTERS] = {0, 0, 0, 0, 0};
@@ -61,117 +56,105 @@ class Guess {
 /**
  * Public implementations
  */
-
-void Guess::check(const std::string solution) {
-  return check(solution, true);
-}
-
-void Guess::check(const std::string solution, bool infer_after) {
-  auto s_count = count_letters(solution);
-  //for (const auto& [k, v] : s_count) {
-  //  std::cout << k << ": " << v << std::endl;
-  //}
+void Guess::compare() {
+  auto s_count = solution_->letter_counts();
 
   // Place green tiles
   for (int i = 0; i < NUM_LETTERS; ++i) {
-    char g = this->word_[i];
-    if (g == solution[i]) {
-      this->greens_[i] = g;
+    char g = guess_->letter(i);
+    if (g == solution_->letter(i)) {
+      greens_[i] = g;
       --s_count[g];
     }
   }
 
   for (int i = 0; i < NUM_LETTERS; ++i) {
-    char g = this->word_[i];
-    if (this->greens_[i]) {
+    char g = guess_->letter(i);
+    if (greens_[i]) {
       continue;
     }
 
     // Place yellow tile only if max number not reached
     if (s_count[g]) {
-      this->yellows_[i] = g;
+      yellows_[i] = g;
       --s_count[g];
     } else {
-      this->greys_[i] = g;
+      greys_[i] = g;
     }
   }
 
-  this->id_string_ = id_string();
-  if (infer_after) {
-    infer();
-  }
+  id_string_ = id_string();
 }
 
 void Guess::infer() {
   // Set correct placements from greens
   for (int i = 0; i < NUM_LETTERS; ++i) {
-    char c = this->greens_[i];
+    char c = greens_[i];
     if (c != 0) {
-      this->correct_placements.push_back(std::pair(i, c));
+      correct_placements.emplace_back(i, c);
     }
   }
 
   // Set wrong placements from yellows + greys
   for (int i = 0; i < NUM_LETTERS; ++i) {
-    char y = this->yellows_[i];
-    char x = this->greys_[i];
+    char y = yellows_[i];
+    char x = greys_[i];
     if (y != 0) {
-      this->wrong_placements.push_back(std::pair(i, y));
+      wrong_placements.emplace_back(i, y);
     }
     if (x != 0) {
-      this->wrong_placements.push_back(std::pair(i, x));
+      wrong_placements.emplace_back(i, x);
     }
   }
 
   // Minimum letter counts from yellow + greens
   for (int i = 0; i < NUM_LETTERS; ++i) {
-    char g = this->greens_[i];
-    char y = this->yellows_[i];
+    char g = greens_[i];
+    char y = yellows_[i];
     if (g != 0) {
-      ++this->min_letter_counts[g];
+      ++min_letter_counts[g];
     }
     if (y != 0) {
-      ++this->min_letter_counts[y];
+      ++min_letter_counts[y];
     }
   }
 
   // Maximum letter counts from greys
   for (int i = 0; i < NUM_LETTERS; ++i) {
-    char x = this->greys_[i];
+    char x = greys_[i];
     if (x != 0) {
-      this->max_letter_counts[x] = 0;
+      max_letter_counts[x] = 0;
     }
   }
 
-  auto letter_count = count_letters(this->word_);
-  for (auto& [s, s_ct] : this->min_letter_counts) {
-    if (s_ct < letter_count[s]) {
+  auto& letter_count = guess_->letter_counts();
+  for (auto& [s, s_ct] : min_letter_counts) {
+    if (s_ct < letter_count.at(s)) {
       // We guessed more of this letter than were in the word, so we know exact
-      this->max_letter_counts[s] = s_ct;
+      max_letter_counts[s] = s_ct;
     }
   }
 }
 
 bool Guess::operator==(const Guess& other) const {
-  return this->id_string() == other.id_string();
+  return id_string() == other.id_string();
 }
 
 uint64_t Guess::id_string() const {
-  if (this->id_string_) {
-    return this->id_string_;
+  if (id_string_) {
+    return id_string_;
   }
 
   uint64_t id = 0;
   for (int i = 0; i < NUM_LETTERS; ++i) {
-    uint64_t c = this->word_[i] - 'a';
+    uint64_t c = guess_->letter(i) - 'a';
     id |= c << 7*i;
 
-    if (this->greens_[i] != 0) {
+    if (greens_[i] != 0) {
       id |= (uint64_t) 0b10 << (7*i + NUM_LETTERS);
-    } else if (this->yellows_[i] != 0) {
+    } else if (yellows_[i] != 0) {
       id |= (uint64_t) 0b01 << (7*i + NUM_LETTERS);
     }
-
   }
   return id;
 }
@@ -179,19 +162,10 @@ uint64_t Guess::id_string() const {
 /**
  * Private implementations
  */
-
-std::map<char, int> Guess::count_letters(const std::string word) {
-  std::map<char, int> counts;
-  for (char c : word) {
-    ++counts[c];
-  }
-
-  return counts;
-}
-
 void Guess::print_state() const {
+  std::cout << "Guessed: " << guess_->letters() << " vs " << solution_->letters() << std::endl;
   std::cout << "GREENS:  [";
-  for (char c : this->greens_) {
+  for (char c : greens_) {
     if (c == 0) {
       std::cout << " _";
     } else {
@@ -201,7 +175,7 @@ void Guess::print_state() const {
   std::cout << " ]" << std::endl;
 
   std::cout << "YELLOWS: [";
-  for (char c : this->yellows_) {
+  for (char c : yellows_) {
     if (c == 0) {
       std::cout << " _";
     } else {
@@ -211,7 +185,7 @@ void Guess::print_state() const {
   std::cout << " ]" << std::endl;
 
   std::cout << "GREYS:   [";
-  for (char c : this->greys_) {
+  for (char c : greys_) {
     if (c == 0) {
       std::cout << " _";
     } else {
@@ -221,25 +195,25 @@ void Guess::print_state() const {
   std::cout << " ]" << std::endl;
 
   std::cout << "Correct placements: ";
-  for (const auto& p : this->correct_placements) {
+  for (const auto& p : correct_placements) {
     std::cout << "(" << p.first << "," << p.second << ") ";
   }
   std::cout << std::endl;
 
   std::cout << "Wrong placements:  ";
-  for (const auto& p : this->wrong_placements) {
+  for (const auto& p : wrong_placements) {
     std::cout << "(" << p.first << "," << p.second << ") ";
   }
   std::cout << std::endl;
 
   std::cout << "Minimum letter counts: ";
-  for (const auto& [k, v] : this->min_letter_counts) {
+  for (const auto& [k, v] : min_letter_counts) {
     std::cout << "(" << k << ":" << v << ") ";
   }
   std::cout << std::endl;
 
   std::cout << "Maximum letter counts: ";
-  for (const auto& [k, v] : this->max_letter_counts) {
+  for (const auto& [k, v] : max_letter_counts) {
     std::cout << "(" << k << ":" << v << ") ";
   }
   std::cout << std::endl;
@@ -255,7 +229,7 @@ std::ostream& operator<<(std::ostream& os, const Guess& guess) {
       os << YELLOWC;   // YELLOW
     }
 
-    os << guess.word_[i] << ENDC;           // ENDC
+    os << guess.guess_->letter(i) << ENDC;           // ENDC
   }
 
   return os;

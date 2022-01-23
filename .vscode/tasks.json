@@ -12,6 +12,7 @@
                 "-Wall",
                 "-Wextra",
                 "-pedantic",
+                "-I/home/hughlynch/projects/vcpkg/installed/x64-linux/include/",
                 "-MD",
                 "-MP",
                 "${file}",
